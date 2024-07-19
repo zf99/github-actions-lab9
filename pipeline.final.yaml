@@ -1,0 +1,53 @@
+name: Pipeline - Build, Test, and Push Docker Image
+
+on:
+  push:
+    branches:
+      - main  # Change this to your main branch name (if it is different from "main")
+
+jobs:
+  build:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push Docker images
+        uses: docker/build-push-action@v4.1.1
+
+        with:
+          context: MyProject
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/my_app:latest
+
+  test:
+    name: Test Image
+    needs: build
+    if: ${{ needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      #Run tests in the build image to proove a
+      - name: Start Docker container
+        run: |
+          docker run -d --name test-container ${{ secrets.DOCKERHUB_USERNAME }}/my_app:latest
+
+      - name: Run pytest inside container
+        run: |
+          docker exec test-container ls -la /apps/
+          docker exec test-container ls -la /apps/my_app/
+          docker exec test-container ls -la /apps/my_app/tests
+          docker exec test-container pytest /apps/my_app/tests/test_app.py
+
+      - name: Stop and remove container
+        run: |
+          docker stop test-container
+          docker rm test-container
